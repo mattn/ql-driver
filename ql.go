@@ -100,15 +100,12 @@ func (s *QlStmt) NumInput() int {
 	return 0
 }
 
-func (s *QlStmt) bind(args []driver.Value) error {
-	return nil
-}
-
 func (s *QlStmt) Query(args []driver.Value) (driver.Rows, error) {
-	if err := s.bind(args); err != nil {
-		return nil, err
+	values := make([]interface{}, len(args))
+	for i, arg := range args {
+		values[i] = arg
 	}
-	rs, _, err := s.c.db.Execute(ql.NewRWCtx(), s.l)
+	rs, _, err := s.c.db.Execute(ql.NewRWCtx(), s.l, values...)
 	if err != nil {
 		return nil, err
 	}
@@ -120,24 +117,31 @@ func (s *QlStmt) Query(args []driver.Value) (driver.Rows, error) {
 		}
 		return false, nil
 	})
-	return &QlRows{s, rs, cols, 0}, err
+	dataCh := make(chan []interface{})
+	closedCh := make(chan bool)
+	go func() {
+		rs[0].Do(false, func(data []interface{}) (bool, error) {
+			dataCh <- data
+			return true, nil
+		})
+		close(dataCh)
+	}()
+	return &QlRows{s, cols, dataCh, closedCh}, err
 }
 
 func (s *QlStmt) Exec(args []driver.Value) (driver.Result, error) {
-	if err := s.bind(args); err != nil {
-		return nil, err
-	}
 	return nil, nil
 }
 
 type QlRows struct {
-	s    *QlStmt
-	r    []ql.Recordset
-	cols []string
-	i    int
+	s        *QlStmt
+	cols     []string
+	dataCh   chan []interface{}
+	closedCh chan bool
 }
 
 func (rc *QlRows) Close() error {
+	close(rc.closedCh)
 	return nil
 }
 
@@ -146,18 +150,11 @@ func (rc *QlRows) Columns() []string {
 }
 
 func (rc *QlRows) Next(dest []driver.Value) error {
-	if rc.i >= len(rc.r) {
-		return io.EOF
-	}
-	err := rc.r[rc.i].Do(false, func(data []interface{}) (bool, error) {
+	if data, ok := <-rc.dataCh; ok {
 		for i, _ := range dest {
 			dest[i] = data[i]
 		}
-		return true, nil
-	})
-	if err != nil {
-		return err
+		return nil
 	}
-	rc.i++
-	return nil
+	return io.EOF
 }
