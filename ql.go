@@ -97,7 +97,7 @@ func (s *QlStmt) Close() error {
 }
 
 func (s *QlStmt) NumInput() int {
-	return 0
+	return -1
 }
 
 func (s *QlStmt) Query(args []driver.Value) (driver.Rows, error) {
