@@ -3,10 +3,9 @@ package ql
 import (
 	"database/sql"
 	"database/sql/driver"
-	"fmt"
+	"errors"
 	"github.com/cznic/ql"
 	"io"
-	"strings"
 )
 
 func init() {
@@ -22,20 +21,27 @@ type QlConn struct {
 
 type QlTx struct {
 	c *QlConn
+	ctx *ql.TCtx
 }
 
 func (tx *QlTx) Commit() error {
+	/*
 	if err := tx.c.exec("COMMIT"); err != nil {
 		return err
 	}
 	return nil
+	*/
+	return errors.New("Not implemented yet")
 }
 
 func (tx *QlTx) Rollback() error {
+	/*
 	if err := tx.c.exec("ROLLBACK"); err != nil {
 		return err
 	}
 	return nil
+	*/
+	return errors.New("Not implemented yet")
 }
 
 func (c *QlConn) exec(cmd string) error {
@@ -43,19 +49,21 @@ func (c *QlConn) exec(cmd string) error {
 	if err != nil {
 		return err
 	}
-	_, i, err := c.db.Execute(ql.NewRWCtx(), l)
+	_, _, err = c.db.Execute(ql.NewRWCtx(), l)
 	if err != nil {
-		a := strings.Split(strings.TrimSpace(fmt.Sprint(l)), "\n")
-		return fmt.Errorf("%v: %s", err, a[i])
+		return err
 	}
 	return nil
 }
 
 func (c *QlConn) Begin() (driver.Tx, error) {
+	/*
 	if err := c.exec("BEGIN TRANSACTION"); err != nil {
 		return nil, err
 	}
-	return &QlTx{c}, nil
+	return &QlTx{c, ql.NewRWCtx()}, nil
+	*/
+	return nil, errors.New("Not implemented yet")
 }
 
 func (d *QlDriver) Open(dsn string) (driver.Conn, error) {
@@ -129,7 +137,30 @@ func (s *QlStmt) Query(args []driver.Value) (driver.Rows, error) {
 	return &QlRows{s, cols, dataCh, closedCh}, err
 }
 
+type QlResult struct {
+	id      int64
+	changes int64
+}
+
+func (r *QlResult) LastInsertId() (int64, error) {
+	return r.id, nil
+}
+
+// Return how many rows affected.
+func (r *QlResult) RowsAffected() (int64, error) {
+	return r.changes, nil
+}
+
 func (s *QlStmt) Exec(args []driver.Value) (driver.Result, error) {
+	values := make([]interface{}, len(args))
+	for i, arg := range args {
+		values[i] = arg
+	}
+	_, _, err := s.c.db.Execute(ql.NewRWCtx(), s.l, values...)
+	if err != nil {
+		return nil, err
+	}
+
 	return nil, nil
 }
 
