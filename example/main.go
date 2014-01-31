@@ -14,37 +14,30 @@ func main() {
 	}
 	defer conn.Close()
 
-	//tx, err := conn.Begin()
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
-	_, err = conn.Exec(`begin transaction;drop table foo;commit;`)
-	_, err = conn.Exec(`begin transaction;create table foo(id int, value string);commit;`)
+	_, err = conn.Exec(`drop table foo`)
 	if err != nil {
 		log.Fatal(err)
 	}
+	_, err = conn.Exec(`create table foo(id int, value string)`)
 	if err != nil {
 		log.Fatal(err)
 	}
 	for i := 1; i <= 100; i++ {
 		_, err = conn.Exec(
-			fmt.Sprintf(`begin transaction;insert into foo(id, value) values(%d, "test%03d");commit;`, i, i))
+			`insert into foo(id, value) values($1, $2)`, i, fmt.Sprintf("test%03d", i))
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
-	//tx.Commit()
 	stmt, err := conn.Prepare(`select * from foo where id == $1`)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer stmt.Close()
-	println("foo2")
 	rows, err := stmt.Query(1)
 	if err != nil {
 		log.Fatal(err)
 	}
-	println("foo3")
 	for rows.Next() {
 		var id int
 		var value string

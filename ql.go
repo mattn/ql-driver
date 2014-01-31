@@ -45,7 +45,7 @@ func (tx *QlTx) Rollback() error {
 }
 
 func (c *QlConn) exec(cmd string) error {
-	l, err := ql.Compile(cmd)
+	l, err := ql.Compile("begin transaction;" + cmd + ";commit;")
 	if err != nil {
 		return err
 	}
@@ -89,7 +89,7 @@ type QlStmt struct {
 }
 
 func (c *QlConn) Prepare(query string) (driver.Stmt, error) {
-	l, err := ql.Compile(query)
+	l, err := ql.Compile("begin transaction;" + query + ";commit;")
 	if err != nil {
 		return nil, err
 	}
